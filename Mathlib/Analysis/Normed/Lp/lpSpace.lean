@@ -39,6 +39,8 @@ The space `lp E p` is the subtype of elements of `∀ i : α, E i` which satisfy
 ## Main results
 
 * `Memℓp.of_exponent_ge`: For `q ≤ p`, a function which is `Memℓp` for `q` is also `Memℓp` for `p`.
+* `Memℓp.comp_injective`, `lp.comap`, `lp.comapCLM`: Restriction along an injective index map,
+  bundled as a continuous linear contraction at Banach exponents.
 * `lp.memℓp_of_tendsto`, `lp.norm_le_of_tendsto`: A pointwise limit of functions in `lp`, all with
   `lp` norm `≤ C`, is itself in `lp` and has `lp` norm `≤ C`.
 * `lp.tsum_mul_le_mul_norm`: basic form of Hölder's inequality
@@ -195,6 +197,14 @@ theorem bddAbove {f : ∀ i, E i} (hf : Memℓp f ∞) : BddAbove (Set.range fun
 theorem summable (hp : 0 < p.toReal) {f : ∀ i, E i} (hf : Memℓp f p) :
     Summable fun i => ‖f i‖ ^ p.toReal :=
   (memℓp_gen_iff hp).1 hf
+
+/-- Restriction along an injective index map preserves `Memℓp` at every exponent. -/
+theorem comp_injective {β : Type*} {f : ∀ i, E i} (hf : Memℓp f p)
+    {e : β → α} (he : Function.Injective e) : Memℓp (fun i ↦ f (e i)) p := by
+  obtain (rfl | rfl | hp) := p.trichotomy
+  · exact memℓp_zero (hf.finite_dsupport.preimage he.injOn)
+  · exact memℓp_infty (hf.bddAbove.range_comp_right e)
+  · exact memℓp_gen ((hf.summable hp).comp_injective he)
 
 lemma summable_of_one {E : Type*} [NormedAddCommGroup E] [CompleteSpace E]
     {x : α → E} (hx : Memℓp x 1) : Summable x :=
@@ -732,6 +742,52 @@ instance [Fact (1 ≤ p)] : IsBoundedSMul 𝕜 (lp E p) :=
   IsBoundedSMul.of_norm_smul_le <| norm_const_smul_le (zero_lt_one.trans_le Fact.out).ne'
 
 end IsBoundedSMul
+
+section Comap
+
+variable {β : Type*}
+
+/-- Restrict an `lp` family along an embedding of its index type. -/
+def comap (e : β ↪ α) (f : lp E p) : lp (fun i ↦ E (e i)) p :=
+  ⟨fun i ↦ f (e i), (lp.memℓp f).comp_injective e.injective⟩
+
+@[simp]
+theorem comap_apply (e : β ↪ α) (f : lp E p) (i : β) : comap e f i = f (e i) := rfl
+
+@[simp]
+theorem comap_refl (f : lp E p) : comap (Function.Embedding.refl α) f = f := rfl
+
+theorem comap_comap {γ : Type*} (e : β ↪ α) (e' : γ ↪ β) (f : lp E p) :
+    comap e' (comap e f) = comap (e'.trans e) f := rfl
+
+/-- Restricting coordinates does not increase the `lp` norm at a nonzero exponent. -/
+theorem norm_comap_le (hp : p ≠ 0) (e : β ↪ α) (f : lp E p) : ‖comap e f‖ ≤ ‖f‖ := by
+  obtain (rfl | rfl | hp') := p.trichotomy
+  · exact (hp rfl).elim
+  · exact norm_le_of_forall_le (norm_nonneg' _) fun i ↦ norm_apply_le_norm hp f (e i)
+  · apply norm_le_of_tsum_le hp' (norm_nonneg' _)
+    rw [norm_rpow_eq_tsum hp']
+    exact tsum_comp_le_tsum_of_inj ((lp.memℓp f).summable hp')
+      (fun i ↦ by positivity) e.injective
+
+variable [NormedRing 𝕜] [∀ i, Module 𝕜 (E i)] [∀ i, IsBoundedSMul 𝕜 (E i)]
+
+variable (𝕜 E p) in
+/-- Restriction along an index embedding as a continuous linear contraction on `lp`. -/
+def comapCLM [Fact (1 ≤ p)] (e : β ↪ α) : lp E p →L[𝕜] lp (fun i ↦ E (e i)) p :=
+  LinearMap.mkContinuous
+    { toFun := comap e
+      map_add' _ _ := rfl
+      map_smul' _ _ := rfl }
+    1 fun f ↦ by
+      change ‖comap e f‖ ≤ 1 * ‖f‖
+      simpa only [one_mul] using norm_comap_le (zero_lt_one.trans_le Fact.out).ne' e f
+
+@[simp]
+theorem comapCLM_apply [Fact (1 ≤ p)] (e : β ↪ α) (f : lp E p) :
+    comapCLM 𝕜 E p e f = comap e f := rfl
+
+end Comap
 
 section Sum
 
